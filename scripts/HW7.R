@@ -53,6 +53,11 @@ generate_clustered_pt_proc(val.at.center = 10) %>%
 # relationship because 1 is more spread than 10 and 100 is
 # also more spread than 10.
 
+#Ian
+# It's hard to see but when set to 1, there is a really tight cluster underneath the quadrant markers as well. 
+# Effect range = 1 sets a very strict threshold for accepting points which causes those tight clusters, but also means many more iterations will occur and through chance, distant points will be accepted 
+# Effect range = 100 means every point has a good chance of being accepted, since all generated points are between -50 & 50
+
 # First try `effect.range` lower
 generate_clustered_pt_proc(effect.range = 1) %>% 
   plot_point_pattern(title = '`effect.range` = 1')
@@ -64,6 +69,10 @@ generate_clustered_pt_proc(effect.range = 100) %>%
 
 # Similar to `val.at.center`, `background` appears to control
 # how tightly (or not) the points are packed within a cluster.
+
+# Ian
+# At background = 1, every point would be accepted
+# Actually, points whose distance < effect range would have lower probability of being accepted although still high
 
 # First try `background` lower
 generate_clustered_pt_proc(background = 0.0005) %>% 
@@ -163,3 +172,98 @@ test_ripleysK(vac = 0.001, title = "val.at.center = 0.001")
 test_ripleysK(vac = 0.0001, title = "val.at.center = 0.0001") 
 
 # Is the problem that the data being generated is "thinned"?
+
+
+# IAN'S ATTEMPT
+
+# Olaf's function except the centers are now defined randomly
+generate_Local_clustered_global_dispersed <- function(
+    # variables that control the size and strength of clusters
+  val.at.center = 1, 
+  effect.range = 10,
+  background = 0.001,
+  # variables that control the number of points and spatial dimensions
+  Pointnum=500,
+  Xmin=-50,
+  Xmax=50,
+  Ymin=-50,
+  Ymax=50,
+  num.centers = 10,
+  # Set seed to keep consistent random numbers
+  seed = 1) {
+  
+  #define the center locations and set up the distance vector
+  centers=matrix(data=runif(num.centers*2,Ymin,Ymax),nrow=num.centers,ncol=2)
+  
+  #define outputs
+  output.X=matrix(nrow = Pointnum, ncol = 1)
+  output.Y=matrix(nrow = Pointnum, ncol = 1)
+  
+  #precalcs - calculate the slope of the clustering effect
+  slope=(val.at.center-background)/effect.range
+  
+  #set a counter
+  outcounter=0
+  
+  #main for loop
+  for (i in 1:100000){
+    
+    #generate a random candidate point for x and y
+    
+    set.seed(seed+i)
+    x.candidate=runif(1, min=Xmin, max=Xmax)
+    
+    set.seed(seed+i*5) # Needs to be repeatable but different from X
+    y.candidate=runif(1, min=Ymin, max=Ymax)
+    
+    # calculate the distance between the candidate point and the nearest cluster center
+    # Lplatt change: vectorized this
+    min.dist=min(sqrt((x.candidate-centers[,1])^2+(y.candidate-centers[,2])^2))
+    
+    #calculate the probability of retaining the candidate point
+    if(min.dist<effect.range){
+      prob=val.at.center-slope*min.dist
+    } else {
+      prob=background
+    }
+    
+    # roll the dice to see if you keep the candidate point
+    testval=runif(1,min=0,max=1)
+    if (testval<prob){
+      outcounter=outcounter+1
+      keep=1
+      output.X[outcounter]=x.candidate
+      output.Y[outcounter]=y.candidate
+    }
+    
+    #if you've reached your target number of points, break from the for loop
+    if(outcounter==Pointnum){
+      break
+    }
+  }
+
+  #create a point pattern object for analysis using the spatstat library
+  output_ppp = ppp(output.X, output.Y, c(Xmin,Xmax), c(Ymin,Ymax))
+  return(output_ppp)
+}
+
+
+test_ripleysK_v2 <- function(vac = 1, er = 10, bg = 0.001, title = "Ripley's K for default") {
+  csr_ppp2 <- generate_csr_pt_proc(seed=19)
+  clust_ppp2 <- generate_Local_clustered_global_dispersed(val.at.center = vac, 
+                                                          effect.range = er, 
+                                                          background = bg,
+                                                          seed=19)
+  
+  plot_point_pattern(csr_ppp2, random = TRUE, title = 'Complete spatial randomness')
+  plot_point_pattern(clust_ppp2, title = 'Clustered', random = T)
+  
+  # Calculate & plot Ripley's K
+  clust_ripK2 <- Kest(clust_ppp2, correction = "Ripley")
+  clust_env2 <- envelope(clust_ppp2, Kest)
+  
+  plot(clust_ripK2, main = title)
+  plot(clust_env2, add=TRUE)
+}
+
+test_ripleysK_v2(er = 1, bg = 0.0001, title = "Ripley's K for er = 1, bg = 1^-5")
