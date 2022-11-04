@@ -177,4 +177,9 @@ test_ripleysK(vac = 0.0001, title = "val.at.center = 0.0001")
 
 
 # IAN'S ATTEMPT
+# Lower effect.range to tighten the data cluster which will cause more iterations
+# to get the data to pass the criteria, but will result in more that are distanced
+# based on chance. Also, decrease background to decrease likelihood of accepting 
+# a point so that we iterate through loops and have a greater chance at getting
+# some points that are further away.
 test_ripleysK(er = 1, bg = 0.0001, title = "Ripley's K for er = 1, bg = 1^-5")
